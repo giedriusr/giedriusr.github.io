@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Render desktop + mobile screenshots of the site into test-results/.
+# Usage: bin/screenshot [url]   (defaults to http://localhost:4000)
+set -euo pipefail
+cd "$(dirname "$0")/.."
+URL="${1:-http://localhost:4000}"
+mkdir -p test-results
+npx --yes playwright@1.56.1 screenshot --full-page --viewport-size=1440,900 "$URL" test-results/desktop.png
+npx --yes playwright@1.56.1 screenshot --full-page --viewport-size=1440,900 --color-scheme=dark "$URL" test-results/desktop-dark.png
+npx --yes playwright@1.56.1 screenshot --full-page --viewport-size=390,844 "$URL" test-results/mobile.png
+echo "Screenshots in test-results/"

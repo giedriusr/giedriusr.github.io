@@ -1,0 +1,40 @@
+# Production deploy: every push to master publishes the site to the gh-pages branch.
+#
+# GitHub Pages must be set to serve from `gh-pages` / (root) for this to matter
+# (Settings → Pages → Build and deployment → Source: Deploy from a branch → gh-pages).
+# Until then, Pages keeps serving master directly and this workflow is harmless.
+#
+# PR previews live under pr-preview/ on the same branch and are preserved here
+# (clean-exclude) so an open preview is not wiped by a production deploy.
+name: Deploy site
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: bin/build
+
+      - name: Publish to gh-pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: _site
+          branch: gh-pages
+          clean: true
+          clean-exclude: pr-preview/
+          force: false
+          commit-message: "Deploy ${{ github.sha }}"

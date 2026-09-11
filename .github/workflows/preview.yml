@@ -1,0 +1,83 @@
+# Pull request previews.
+#
+# 1. "preview"     – publishes the PR's site to gh-pages/pr-preview/pr-<N>/ and posts a
+#                    sticky comment with the URL (https://giedriusr.lt/pr-preview/pr-<N>/).
+#                    Removed automatically when the PR is closed.
+# 2. "screenshots" – renders desktop (light + dark) and mobile screenshots and attaches
+#                    them to the workflow run as an artifact. Works even before GitHub
+#                    Pages is switched to the gh-pages branch.
+# 3. "validate"    – HTML validation, so broken markup never reaches master.
+#
+# One-time repo settings:
+#   Settings → Actions → General → Workflow permissions → "Read and write permissions"
+#   Settings → Pages → Source: Deploy from a branch → gh-pages / (root)
+name: PR preview
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        if: github.event.action != 'closed'
+        run: bin/build
+
+      - name: Deploy preview
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: ./_site/
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
+          pages-base-url: giedriusr.lt
+          action: auto
+
+  screenshots:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and serve
+        run: |
+          bin/build
+          (cd _site && python3 -m http.server 4000 >/dev/null 2>&1 &)
+          sleep 2
+
+      - name: Render screenshots
+        run: |
+          mkdir -p test-results
+          npx --yes playwright@1.56.1 screenshot --full-page --viewport-size=1440,900 http://localhost:4000 test-results/desktop.png
+          npx --yes playwright@1.56.1 screenshot --full-page --viewport-size=1440,900 --color-scheme=dark http://localhost:4000 test-results/desktop-dark.png
+          npx --yes playwright@1.56.1 screenshot --full-page --viewport-size=390,844 http://localhost:4000 test-results/mobile.png
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-pr-${{ github.event.number }}
+          path: test-results/
+          retention-days: 14
+
+  validate:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate HTML
+        run: npx --yes html-validate@9 index.html
